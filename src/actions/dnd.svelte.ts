@@ -2,8 +2,12 @@
 import type { DateKey } from '../lib/time/dates';
 import { startGesture } from './gesture';
 import { ui } from '../lib/store/ui.svelte';
+import { store } from '../lib/store/state.svelte';
 
-export const PX_PER_MIN = 1.2;
+/** Pixels per minuut (zoomniveau). */
+export function px(): number {
+  return store.data.settings.zoom;
+}
 
 export type DragPayload =
   | { kind: 'block'; blockId: string; fromDate: DateKey; duration: number; offset: number; title: string }
@@ -17,6 +21,10 @@ interface DragState {
   x: number;
   y: number;
   target: DropTarget | null;
+  /** start-positie; automatisch scrollen pas na echte beweging */
+  x0: number;
+  y0: number;
+  moved: boolean;
 }
 
 export const drag = $state<{ active: DragState | null }>({ active: null });
@@ -27,7 +35,7 @@ export function hitTest(x: number, y: number, offset = 0): DropTarget | null {
   const col = els.find(el => el instanceof HTMLElement && el.dataset.day) as HTMLElement | undefined;
   if (!col) return null;
   const r = col.getBoundingClientRect();
-  return { date: col.dataset.day!, start: (y - r.top) / PX_PER_MIN - offset };
+  return { date: col.dataset.day!, start: (y - r.top) / px() - offset };
 }
 
 let scrollRaf = 0;
@@ -42,7 +50,7 @@ function autoScroll() {
     // enkel scrollen als de vinger/muis binnen de planner bij de rand komt (onder de daghoofdjes)
     const edge = 40;
     const top = r.top + 46;
-    const inside = a.x >= r.left && a.x <= r.right;
+    const inside = a.moved && a.x >= r.left && a.x <= r.right;
     let dy = 0;
     if (inside && a.y >= top && a.y < top + edge) dy = -10;
     else if (inside && a.y > r.bottom - edge && a.y <= r.bottom) dy = 10;
@@ -69,7 +77,8 @@ export function beginDrag(
   const offset = payload.kind === 'block' ? payload.offset : 0;
   startGesture(e, {
     onStart(x, y) {
-      drag.active = { payload, x, y, target: hitTest(x, y, offset) };
+      edgeSince = 0;
+      drag.active = { payload, x, y, x0: x, y0: y, moved: false, target: hitTest(x, y, offset) };
       if (ui.drawerOpen) ui.drawerPeek = true;
       autoScroll();
     },
@@ -77,6 +86,7 @@ export function beginDrag(
       if (!drag.active) return;
       drag.active.x = x;
       drag.active.y = y;
+      if (Math.hypot(x - drag.active.x0, y - drag.active.y0) > 24) drag.active.moved = true;
       drag.active.target = hitTest(x, y, offset);
     },
     onEnd(x, y) {

@@ -13,6 +13,7 @@ export type Dialog =
   | { kind: 'block'; blockId: string | null; occurrenceDate?: DateKey; draft?: BlockDraft }
   | { kind: 'checklist'; blockId: string; date: DateKey }
   | { kind: 'list'; template: ListTemplate }
+  | { kind: 'listEdit'; listId: string | null }
   | { kind: 'plan'; todoId: string }
   | { kind: 'settings' };
 

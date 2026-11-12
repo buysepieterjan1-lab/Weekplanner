@@ -9,6 +9,8 @@
   import Lists from './components/Lists.svelte';
   import Todos from './components/Todos.svelte';
   import Counter from './components/Counter.svelte';
+  import Afvinklijst from './components/Afvinklijst.svelte';
+  import ListEditor from './components/ListEditor.svelte';
   import BlockDialog from './components/BlockDialog.svelte';
   import ChecklistDialog from './components/ChecklistDialog.svelte';
   import ListDialog from './components/ListDialog.svelte';
@@ -18,15 +20,20 @@
   import Decor from './components/Decor.svelte';
 
   const MOBILE = '(max-width: 760px)';
+  const NARROW = '(max-width: 1180px)';
+  let narrow = $state(false);
 
   onMount(() => {
     const mq = window.matchMedia(MOBILE);
+    const nq = window.matchMedia(NARROW);
     ui.mobile = mq.matches;
+    narrow = nq.matches;
     if (ui.mobile) ui.view = 'day';
-    const onChange = () => { ui.mobile = mq.matches; if (!ui.mobile) ui.drawerOpen = false; };
+    const onChange = () => { ui.mobile = mq.matches; narrow = nq.matches; if (!ui.mobile) ui.drawerOpen = false; };
     mq.addEventListener('change', onChange);
+    nq.addEventListener('change', onChange);
     void store.init().then(() => { ui.current = clampToEnd(ui.current, store.data.settings.endDate); });
-    return () => mq.removeEventListener('change', onChange);
+    return () => { mq.removeEventListener('change', onChange); nq.removeEventListener('change', onChange); };
   });
 
   const d = $derived(ui.dialog);
@@ -54,15 +61,15 @@
       {/if}
       <Lists />
       <Todos />
-      {#if ui.mobile}<Counter />{/if}
+      {#if ui.mobile || narrow}<Afvinklijst /><Counter />{/if}
     </aside>
 
     <section class="planner" aria-label="Planner">
       {#if ui.view === 'month'}<MonthView />{:else}<Grid />{/if}
     </section>
 
-    {#if !ui.mobile}
-      <aside class="side right" aria-label="Teller"><Counter /></aside>
+    {#if !ui.mobile && !narrow}
+      <aside class="side right" aria-label="Teller en afvinklijst"><Counter /><Afvinklijst /></aside>
     {/if}
   </main>
 </div>
@@ -73,6 +80,8 @@
   <ChecklistDialog blockId={d.blockId} date={d.date} />
 {:else if d.kind === 'list'}
   <ListDialog template={d.template} />
+{:else if d.kind === 'listEdit'}
+  <ListEditor listId={d.listId} />
 {:else if d.kind === 'plan'}
   <PlanTodoDialog todoId={d.todoId} />
 {:else if d.kind === 'settings'}

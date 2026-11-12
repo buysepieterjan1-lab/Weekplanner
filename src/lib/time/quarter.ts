@@ -32,8 +32,9 @@ export function parseHm(s: string): number | null {
   if (mi > 59 || h > 24 || (h === 24 && mi !== 0)) return null;
   return h * 60 + mi;
 }
+/** 90 → "1 uur 30 min", 120 → "2 uur", 45 → "45 min" */
 export function formatDuration(m: number): string {
   const h = Math.floor(m / 60), r = m % 60;
   if (!h) return `${r} min`;
-  return r ? `${h}u${pad(r)}` : `${h}u`;
+  return r ? `${h} uur ${r} min` : `${h} uur`;
 }

@@ -3,6 +3,7 @@
   import { ui } from '../lib/store/ui.svelte';
   import { periodKeys } from '../lib/time/dates';
   import { countByCategory } from '../lib/planner/counter';
+  import { formatDuration } from '../lib/time/quarter';
 
   const rows = $derived(countByCategory(
     store.data.blocks, store.data.categories, periodKeys(ui.view, ui.current),
@@ -24,10 +25,10 @@
   </div>
   <ul class="counter" data-testid="counter">
     {#each rows as r (r.category.id)}
-      <li style:--c={r.category.color}>
+      <li style:--c={r.category.color} class:zero={!r.count}>
         <div class="c-top">
           <span class="c-name">{r.category.name}</span>
-          <span class="c-num">{r.count} {r.count === 1 ? 'blok' : 'blokken'} · {r.minutes} min</span>
+          <span class="c-num">{r.count} {r.count === 1 ? 'blok' : 'blokken'} · {formatDuration(r.minutes)}</span>
         </div>
         <div class="c-bar" aria-hidden="true"><i style:width="{(r.count / max) * 100}%"></i></div>
       </li>

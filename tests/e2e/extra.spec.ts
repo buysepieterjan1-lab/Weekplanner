@@ -9,7 +9,7 @@ async function addBlock(page: import('@playwright/test').Page, title: string, st
   if (opts.date) await dlg.getByLabel('Datum').fill(opts.date);
   await dlg.getByLabel('Start').selectOption({ label: start });
   await dlg.getByLabel('Einde', { exact: true }).selectOption({ label: end });
-  if (opts.weekly) await dlg.getByLabel(/Wekelijks herhalen/).check();
+  if (opts.weekly) await dlg.locator('#b-repeat').selectOption('weekly');
   await dlg.getByRole('button', { name: 'Opslaan' }).click();
   await expect(dlg).toBeHidden();
 }
@@ -86,7 +86,7 @@ test('back-up exporteren en terugzetten', async ({ page }) => {
   await s.getByRole('button', { name: 'Exporteren (JSON)' }).click();
   const file = await (await dl).path();
   const json = JSON.parse(readFileSync(file, 'utf8'));
-  expect(json.schemaVersion).toBe(1);
+  expect(json.schemaVersion).toBe(2);
   expect(json.blocks[0].title).toBe('Back-up blok');
 
   // ongeldige back-up: niets gewijzigd

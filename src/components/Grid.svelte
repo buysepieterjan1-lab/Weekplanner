@@ -3,7 +3,7 @@
   import { ui } from '../lib/store/ui.svelte';
   import { store } from '../lib/store/state.svelte';
   import { weekDays, todayKey, DAYS_SHORT, weekday, dayNumber, MONTHS, monthIndex, DAYS_LONG, formatLong, type DateKey } from '../lib/time/dates';
-  import { PX_PER_MIN, drag } from '../actions/dnd.svelte';
+  import { px, drag } from '../actions/dnd.svelte';
   import DayColumn from './DayColumn.svelte';
 
   const days = $derived<DateKey[]>(ui.view === 'day' ? [ui.current] : weekDays(ui.current));
@@ -13,9 +13,19 @@
   let scroller: HTMLDivElement;
 
   onMount(() => {
-    scroller.scrollTop = 7 * 60 * PX_PER_MIN - 8;
+    scroller.scrollTop = 7 * 60 * px() - 8;
     const t = setInterval(() => { now = new Date(); }, 60_000);
     return () => clearInterval(t);
+  });
+
+  // bij zoomen hetzelfde tijdstip bovenaan houden
+  let lastPx = px();
+  $effect(() => {
+    const p = px();
+    if (!scroller || p === lastPx) return;
+    const minute = scroller.scrollTop / lastPx;
+    lastPx = p;
+    requestAnimationFrame(() => { scroller.scrollTop = minute * p; });
   });
 
   function openDay(d: DateKey) {
@@ -25,7 +35,7 @@
 </script>
 
 <div class="grid-scroll" data-grid-scroll bind:this={scroller} class:dragging={!!drag.active}>
-  <div class="grid" style:--cols={days.length} class:single={days.length === 1}>
+  <div class="grid" style:--cols={days.length} style:--px="{px()}px" class:single={days.length === 1} class:zoomed-out={px() < 1}>
     <div class="corner" aria-hidden="true"></div>
     {#each days as d (d)}
       <button
@@ -43,7 +53,7 @@
 
     <div class="hours" aria-hidden="true">
       {#each Array.from({ length: 24 }, (_, i) => i) as h}
-        <span style:top="{h * 60 * PX_PER_MIN}px">{String(h).padStart(2, '0')}:00</span>
+        <span style:top="{h * 60 * px()}px">{String(h).padStart(2, '0')}:00</span>
       {/each}
     </div>
 

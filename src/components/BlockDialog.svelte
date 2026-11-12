@@ -1,13 +1,16 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import Modal from './Modal.svelte';
+  import MiniCalendar from './MiniCalendar.svelte';
   import { store } from '../lib/store/state.svelte';
   import { ui, type BlockDraft } from '../lib/store/ui.svelte';
-  import { validateBlock } from '../lib/validate';
+  import { validateBlock, validateRepeat } from '../lib/validate';
   import { addBlock, updateBlock, deleteBlock, type BlockFields } from '../lib/planner/ops';
+  import { isRepeating } from '../lib/planner/occurrences';
   import { QUARTER_OPTIONS } from '../lib/actions';
   import { hm } from '../lib/time/quarter';
-  import { formatLong, type DateKey } from '../lib/time/dates';
+  import { formatLong, weekday, DAYS_SHORT, DAYS_LONG, isDateKey, type DateKey } from '../lib/time/dates';
+  import type { Repeat, RepeatKind } from '../lib/model/types';
 
   let { blockId, occurrenceDate, draft }: { blockId: string | null; occurrenceDate?: DateKey; draft?: BlockDraft } = $props();
 
@@ -15,6 +18,7 @@
   const init = untrack(() => ({ blockId, occurrenceDate, draft }));
   const existing = store.data.blocks.find(b => b.id === init.blockId) ?? null;
   const end = store.data.settings.endDate;
+  const r0: Repeat = existing?.repeat ?? { kind: 'none' };
 
   let title = $state(existing?.title ?? '');
   let date = $state<string>(init.occurrenceDate ?? existing?.date ?? init.draft?.date ?? ui.current);
@@ -23,8 +27,16 @@
   let categoryId = $state(existing?.categoryId ?? store.data.categories[0]?.id ?? 'overig');
   let location = $state(existing?.location ?? '');
   let notes = $state(existing?.notes ?? '');
-  let repeatWeekly = $state(existing?.repeatWeekly ?? false);
+  let repeatKind = $state<RepeatKind>(r0.kind);
+  let until = $state<string>(r0.until ?? end);
+  let days = $state<number[]>(r0.days ?? []);
+  let extraDates = $state<DateKey[]>(r0.dates ?? []);
+  let todoChoice = $state<boolean | null>(existing ? (typeof existing.inTodo === 'boolean' ? existing.inTodo : null) : null);
   let error = $state('');
+
+  const catDefault = $derived(store.data.categories.find(c => c.id === categoryId)?.inChecklist ?? false);
+  const inTodo = $derived(todoChoice ?? catDefault);
+  const wd = $derived(isDateKey(date) ? weekday(date) : 0);
 
   // tijden die niet op een kwartier vallen toch kunnen tonen
   const options = $derived.by(() => {
@@ -32,10 +44,34 @@
     return [...QUARTER_OPTIONS, ...extra].sort((a, b) => a.value - b.value);
   });
 
+  function toggleDay(d: number) {
+    if (d === wd) return; // de dag van de eerste keer hoort er altijd bij
+    days = days.includes(d) ? days.filter(x => x !== d) : [...days, d].sort();
+  }
+  function toggleDate(d: DateKey) {
+    extraDates = extraDates.includes(d) ? extraDates.filter(x => x !== d) : [...extraDates, d].sort();
+  }
+
+  function buildRepeat(): Repeat {
+    const u = until && until < end ? { until } : {};
+    switch (repeatKind) {
+      case 'none': return { kind: 'none' };
+      case 'daily': return { kind: 'daily', ...u };
+      case 'weekly': return { kind: 'weekly', ...u };
+      case 'weekdays': return { kind: 'weekdays', days: [...new Set([...days, wd])].sort(), ...u };
+      case 'dates': return { kind: 'dates', dates: extraDates.filter(d => d > date && d <= end) };
+    }
+  }
+
   function save() {
     error = validateBlock({ title, date, start, end: stop }, end) ?? '';
+    const repeat = buildRepeat();
+    if (!error) error = validateRepeat(repeat, date, end) ?? '';
     if (error) return;
-    const f: BlockFields = { title, date, start, end: stop, categoryId, location: location.trim(), notes: notes.trim(), repeatWeekly };
+    const f: BlockFields = {
+      title, date, start, end: stop, categoryId, location: location.trim(), notes: notes.trim(), repeat,
+      ...(todoChoice === null || todoChoice === catDefault ? {} : { inTodo: todoChoice }),
+    };
     if (existing) store.change(d => updateBlock(d, existing.id, f, init.occurrenceDate));
     else store.change(d => { addBlock(d, f); });
     ui.current = date;
@@ -44,15 +80,21 @@
 
   async function remove() {
     if (!existing) return;
-    const ok = await ui.confirm(existing.repeatWeekly ? 'Dit blok en alle herhalingen verwijderen?' : 'Dit blok verwijderen?');
+    const ok = await ui.confirm(isRepeating(existing) ? 'Dit blok en alle herhalingen verwijderen?' : 'Dit blok verwijderen?');
     if (!ok) return;
     store.change(d => deleteBlock(d, existing.id));
     ui.close();
   }
 
   function enter(e: KeyboardEvent) {
-    if (e.key === 'Enter' && !(e.target instanceof HTMLTextAreaElement)) { e.preventDefault(); save(); }
+    if (e.key !== 'Enter') return;
+    const t = e.target as HTMLElement;
+    if (t instanceof HTMLTextAreaElement || t instanceof HTMLButtonElement) return;
+    e.preventDefault();
+    save();
   }
+
+  const weekdayName = $derived(DAYS_LONG[wd]);
 </script>
 
 <Modal title={existing ? 'Blok bewerken' : 'Nieuw blok'} onclose={() => ui.close()} testid="block-dialog">
@@ -96,8 +138,43 @@
       <p class="small-info">Lesgevers: {existing.teachers.join(', ')}</p>
     {/if}
 
-    <label class="check"><input type="checkbox" bind:checked={repeatWeekly} /> Wekelijks herhalen (tot en met {formatLong(end)})</label>
-    {#if existing?.repeatWeekly}<p class="hint">Wijzigingen gelden voor alle herhalingen van dit blok.</p>{/if}
+    <label class="check">
+      <input type="checkbox" checked={inTodo} onchange={e => (todoChoice = (e.currentTarget as HTMLInputElement).checked)} />
+      In de afvinklijst zetten
+    </label>
+
+    <fieldset class="repeat">
+      <legend>Herhalen</legend>
+      <label for="b-repeat" class="sr-only">Herhalen</label>
+      <select id="b-repeat" bind:value={repeatKind}>
+        <option value="none">Niet herhalen</option>
+        <option value="daily">Elke dag</option>
+        <option value="weekly">Elke week op {weekdayName}</option>
+        <option value="weekdays">Op gekozen weekdagen</option>
+        <option value="dates">Zelf aanduiden in een kalender</option>
+      </select>
+
+      {#if repeatKind === 'weekdays'}
+        <div class="weekday-picker" role="group" aria-label="Weekdagen">
+          {#each DAYS_SHORT as d, i}
+            <button type="button" class:on={i === wd || days.includes(i)} aria-pressed={i === wd || days.includes(i)}
+              disabled={i === wd} aria-label={DAYS_LONG[i]} onclick={() => toggleDay(i)}>{d}</button>
+          {/each}
+        </div>
+      {/if}
+
+      {#if repeatKind === 'daily' || repeatKind === 'weekly' || repeatKind === 'weekdays'}
+        <label for="b-until">Tot en met</label>
+        <input id="b-until" type="date" bind:value={until} min={date} max={end} />
+      {/if}
+
+      {#if repeatKind === 'dates' && isDateKey(date)}
+        <MiniCalendar first={date} selected={extraDates.filter(d => d > date)} min={date} max={end} ontoggle={toggleDate} />
+      {/if}
+
+      {#if existing && isRepeating(existing)}<p class="hint">Wijzigingen gelden voor alle herhalingen van dit blok.</p>{/if}
+      {#if repeatKind !== 'none'}<p class="hint">Herhalingen lopen nooit verder dan {formatLong(end)}.</p>{/if}
+    </fieldset>
 
     {#if error}<p class="err" role="alert" data-testid="block-error">{error}</p>{/if}
   </div>

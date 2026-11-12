@@ -3,7 +3,7 @@
   import { ui } from '../lib/store/ui.svelte';
   import { occurrencesOn } from '../lib/planner/occurrences';
   import { layoutDay } from '../lib/planner/layout';
-  import { drag, PX_PER_MIN } from '../actions/dnd.svelte';
+  import { drag, px } from '../actions/dnd.svelte';
   import { startGesture } from '../actions/gesture';
   import { snapRange, placeBlock, hm, clamp, DAY_MINUTES } from '../lib/time/quarter';
   import { DAYS_LONG, weekday, formatLong, type DateKey } from '../lib/time/dates';
@@ -28,7 +28,7 @@
     return { ...placeBlock(a.target.start, dur), title: a.payload.title };
   });
 
-  const minAt = (y: number) => clamp((y - col.getBoundingClientRect().top) / PX_PER_MIN, 0, DAY_MINUTES);
+  const minAt = (y: number) => clamp((y - col.getBoundingClientRect().top) / px(), 0, DAY_MINUTES);
 
   function create(start: number, endMin: number) {
     ui.open({ kind: 'block', blockId: null, draft: { date: day, start, end: endMin } });
@@ -76,18 +76,18 @@
   {/each}
 
   {#if selRange}
-    <div class="sel-preview" style:top="{selRange.start * PX_PER_MIN}px" style:height="{(selRange.end - selRange.start) * PX_PER_MIN}px" aria-hidden="true">
+    <div class="sel-preview" style:top="{selRange.start * px()}px" style:height="{(selRange.end - selRange.start) * px()}px" aria-hidden="true">
       <span>{hm(selRange.start)} – {hm(selRange.end)}</span>
     </div>
   {/if}
 
   {#if dropPreview}
-    <div class="drop-preview" style:top="{dropPreview.start * PX_PER_MIN}px" style:height="{(dropPreview.end - dropPreview.start) * PX_PER_MIN}px" aria-hidden="true">
+    <div class="drop-preview" style:top="{dropPreview.start * px()}px" style:height="{(dropPreview.end - dropPreview.start) * px()}px" aria-hidden="true">
       <span>{hm(dropPreview.start)} – {hm(dropPreview.end)}</span>
     </div>
   {/if}
 
   {#if isToday}
-    <div class="now-line" style:top="{nowMin * PX_PER_MIN}px" aria-hidden="true"></div>
+    <div class="now-line" style:top="{nowMin * px()}px" aria-hidden="true"></div>
   {/if}
 </div>

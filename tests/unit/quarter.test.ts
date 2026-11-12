@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { snap, snapRange, placeBlock, hm, parseHm } from '../../src/lib/time/quarter';
+import { snap, snapRange, placeBlock, hm, parseHm, formatDuration } from '../../src/lib/time/quarter';
 
 describe('afronden op kwartieren', () => {
   it('snap', () => {
@@ -23,5 +23,12 @@ describe('afronden op kwartieren', () => {
     expect(parseHm('14:00')).toBe(840);
     expect(parseHm('24:00')).toBe(1440);
     expect(parseHm('25:00')).toBeNull();
+  });
+  it('duur in uur en minuten', () => {
+    expect(formatDuration(90)).toBe('1 uur 30 min');
+    expect(formatDuration(120)).toBe('2 uur');
+    expect(formatDuration(45)).toBe('45 min');
+    expect(formatDuration(975)).toBe('16 uur 15 min');
+    expect(formatDuration(0)).toBe('0 min');
   });
 });

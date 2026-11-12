@@ -94,6 +94,7 @@
 <Modal title="Instellingen" onclose={() => ui.close()} testid="settings-dialog">
   <section aria-labelledby="set-cat">
     <h3 id="set-cat">Categorieën</h3>
+    <p class="hint">Vink "✓-lijst" aan om blokken van die categorie in de afvinklijst te zetten.</p>
     <ul class="cat-list">
       {#each store.data.categories as c (c.id)}
         <li>
@@ -101,6 +102,11 @@
             onchange={e => { const v = (e.currentTarget as HTMLInputElement).value; store.change(d => { d.categories.find(x => x.id === c.id)!.color = v; }); }} />
           <input type="text" value={c.name} maxlength="30" aria-label="Naam van categorie {c.name}"
             onchange={e => rename(c.id, e)} onkeydown={e => { if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur(); }} />
+          <label class="cat-todo" title="Blokken van deze categorie komen in de afvinklijst">
+            <input type="checkbox" checked={!!c.inChecklist} aria-label="{c.name} in de afvinklijst"
+              onchange={e => { const v = (e.currentTarget as HTMLInputElement).checked; store.change(d => { d.categories.find(x => x.id === c.id)!.inChecklist = v; }); }} />
+            <span aria-hidden="true">✓-lijst</span>
+          </label>
           <button type="button" class="danger" disabled={c.id === OVERIG_ID} onclick={() => removeCat(c.id, c.name)}
             aria-label="Categorie {c.name} verwijderen" title={c.id === OVERIG_ID ? 'Overig kan niet verwijderd worden' : 'Verwijderen'}>Verwijderen</button>
         </li>

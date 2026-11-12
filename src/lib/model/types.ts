@@ -1,11 +1,13 @@
 import type { DateKey } from '../time/dates';
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export interface Category {
   id: string;
   name: string;
   color: string;
+  /** blokken van deze categorie komen standaard in de afvinklijst */
+  inChecklist?: boolean;
 }
 
 export interface ChecklistItem {
@@ -13,6 +15,23 @@ export interface ChecklistItem {
   text: string;
   minutes?: number;
   group?: string;
+}
+
+/**
+ * Herhaling. De eerste keer is altijd `block.date`.
+ * - daily: elke dag
+ * - weekly: elke week op dezelfde weekdag als de eerste keer
+ * - weekdays: op de gekozen weekdagen (0 = maandag … 6 = zondag)
+ * - dates: op zelf gekozen datums (mini-kalender)
+ */
+export type RepeatKind = 'none' | 'daily' | 'weekly' | 'weekdays' | 'dates';
+
+export interface Repeat {
+  kind: RepeatKind;
+  /** laatste dag (t/m); zonder waarde: tot de eindgrens */
+  until?: DateKey;
+  days?: number[];
+  dates?: DateKey[];
 }
 
 export interface Block {
@@ -26,12 +45,16 @@ export interface Block {
   location: string;
   notes: string;
   teachers?: string[];
-  repeatWeekly: boolean;
+  repeat: Repeat;
   source: 'manual' | 'ics';
   icsUid?: string;
   checklist?: ChecklistItem[];
-  /** afgevinkte item-id's per datum (per keer bij herhaling) */
+  /** afgevinkte checklist-items per datum (per keer bij herhaling) */
   checks?: Record<DateKey, string[]>;
+  /** datums waarop dit blok afgevinkt is */
+  done?: DateKey[];
+  /** expliciet wel/niet in de afvinklijst; zonder waarde geldt de categorie */
+  inTodo?: boolean;
 }
 
 export interface Todo {
@@ -56,6 +79,8 @@ export interface Settings {
   examDate: DateKey;
   decor: boolean;
   counterSort: 'count' | 'name';
+  /** pixels per minuut in het raster */
+  zoom: number;
 }
 
 export interface AppData {
@@ -63,5 +88,6 @@ export interface AppData {
   categories: Category[];
   blocks: Block[];
   todos: Todo[];
+  lists: ListTemplate[];
   settings: Settings;
 }

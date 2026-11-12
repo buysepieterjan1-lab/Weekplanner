@@ -1,15 +1,15 @@
 <script lang="ts">
   import type { Occurrence } from '../lib/planner/occurrences';
-  import { checklistProgress } from '../lib/planner/occurrences';
+  import { checklistProgress, isDone, isRepeating, describeRepeat } from '../lib/planner/occurrences';
   import { categoryOf, resize, handleDrop } from '../lib/actions';
-  import { beginDrag, PX_PER_MIN } from '../actions/dnd.svelte';
+  import { beginDrag, px } from '../actions/dnd.svelte';
   import { startGesture } from '../actions/gesture';
   import { hm, snap, clamp, QUARTER, DAY_MINUTES, formatDuration } from '../lib/time/quarter';
   import { shortLocation } from '../lib/ics/timeedit';
   import { addDays, formatShort } from '../lib/time/dates';
   import { ui } from '../lib/store/ui.svelte';
   import { store } from '../lib/store/state.svelte';
-  import { resizeBlock, moveBlock } from '../lib/planner/ops';
+  import { resizeBlock, moveBlock, toggleDone } from '../lib/planner/ops';
   import { tick } from 'svelte';
 
   let { occ, lane, lanes }: { occ: Occurrence; lane: number; lanes: number } = $props();
@@ -18,10 +18,16 @@
   const cat = $derived(categoryOf(b.categoryId));
   let previewEnd = $state<number | null>(null);
   const end = $derived(previewEnd ?? b.end);
-  const height = $derived((end - b.start) * PX_PER_MIN);
+  const height = $derived((end - b.start) * px());
   const progress = $derived(b.checklist?.length ? checklistProgress(b, occ.date) : null);
   const room = $derived(shortLocation(b.location));
   const compact = $derived(end - b.start < 45);
+  const done = $derived(isDone(b, occ.date));
+  const repeating = $derived(isRepeating(b));
+
+  function setDone(v: boolean) {
+    store.change(d => toggleDone(d, b.id, occ.date, v));
+  }
   let el: HTMLDivElement;
 
   function open() {
@@ -30,11 +36,11 @@
   }
 
   function onpointerdown(e: PointerEvent) {
-    if ((e.target as HTMLElement).closest('[data-resize]')) return;
+    if ((e.target as HTMLElement).closest('[data-resize], [data-check]')) return;
     const r = el.getBoundingClientRect();
     beginDrag(e, {
       kind: 'block', blockId: b.id, fromDate: occ.date, duration: b.end - b.start,
-      offset: (e.clientY - r.top) / PX_PER_MIN, title: b.title,
+      offset: (e.clientY - r.top) / px(), title: b.title,
     }, handleDrop, open);
   }
 
@@ -44,7 +50,7 @@
     const top = el.getBoundingClientRect().top;
     startGesture(e, {
       onMove(_x, y) {
-        previewEnd = clamp(snap(b.start + (y - top) / PX_PER_MIN), b.start + QUARTER, DAY_MINUTES);
+        previewEnd = clamp(snap(b.start + (y - top) / px()), b.start + QUARTER, DAY_MINUTES);
       },
       onEnd(_x, _y, moved) {
         if (previewEnd != null && previewEnd !== b.end) resize(b.id, previewEnd);
@@ -58,6 +64,7 @@
   async function onkeydown(e: KeyboardEvent) {
     if (e.target !== el) return;
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); return; }
+    if (e.key === 'x' || e.key === 'X') { e.preventDefault(); setDone(!done); return; }
     let toDate = occ.date;
     const dur = b.end - b.start;
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
@@ -79,7 +86,8 @@
     `${b.title}, ${formatShort(occ.date)} ${hm(b.start)} tot ${hm(b.end)}` +
     `${room ? `, ${room}` : ''}, ${cat.name}` +
     `${progress ? `, ${progress.done} van ${progress.total} klaar` : ''}` +
-    `${b.repeatWeekly ? ', herhaalt wekelijks' : ''}`,
+    `${repeating ? `, herhaalt ${describeRepeat(b, store.data.settings.endDate)}` : ''}` +
+    `${done ? ', afgewerkt' : ''}`,
   );
 </script>
 
@@ -87,16 +95,17 @@
   bind:this={el}
   class="block"
   class:compact
-  class:repeat={b.repeatWeekly}
+  class:repeat={repeating}
+  class:done
   class:resizing={previewEnd != null}
   role="button"
   tabindex="0"
   aria-label={label}
-  aria-keyshortcuts="Enter ArrowUp ArrowDown ArrowLeft ArrowRight Shift+ArrowUp Shift+ArrowDown"
+  aria-keyshortcuts="Enter X ArrowUp ArrowDown ArrowLeft ArrowRight Shift+ArrowUp Shift+ArrowDown"
   title="{b.title} · {hm(b.start)}–{hm(end)} ({formatDuration(end - b.start)})"
   data-occ={occ.key}
   data-testid="block"
-  style:top="{b.start * PX_PER_MIN}px"
+  style:top="{b.start * px()}px"
   style:height="{Math.max(height - 2, 14)}px"
   style:left="calc({(lane * 100) / lanes}% + 2px)"
   style:width="calc({100 / lanes}% - 4px)"
@@ -117,5 +126,16 @@
     <span class="b-progress b-progress-inline">{progress.done}/{progress.total} klaar</span>
   {/if}
   <span class="b-end">{hm(end)}</span>
+  <input
+    type="checkbox"
+    class="b-check"
+    data-check
+    data-testid="block-check"
+    checked={done}
+    tabindex="-1"
+    aria-label="{b.title} afvinken"
+    title={done ? 'Afgewerkt (klik om terug open te zetten)' : 'Afvinken'}
+    onchange={e => setDone((e.currentTarget as HTMLInputElement).checked)}
+  />
   <div class="b-resize" data-resize aria-hidden="true" onpointerdown={onResizeDown}></div>
 </div>

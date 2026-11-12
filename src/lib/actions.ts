@@ -2,7 +2,7 @@
 import { store } from './store/state.svelte';
 import { ui } from './store/ui.svelte';
 import { moveBlock, resizeBlock, blockFromTemplate, blockFromTodo } from './planner/ops';
-import { LIST_TEMPLATES, OVERIG_ID } from './model/defaults';
+import { OVERIG_ID } from './model/defaults';
 import type { DragPayload, DropTarget } from '../actions/dnd.svelte';
 import { formatLong, type DateKey } from './time/dates';
 import { hm, QUARTER, DAY_MINUTES } from './time/quarter';
@@ -21,7 +21,7 @@ export function handleDrop(p: DragPayload, t: DropTarget): void {
   if (p.kind === 'block') {
     store.change(d => moveBlock(d, p.blockId, p.fromDate, t.date, t.start));
   } else if (p.kind === 'template') {
-    const tpl = LIST_TEMPLATES.find(x => x.id === p.templateId);
+    const tpl = store.data.lists.find(x => x.id === p.templateId);
     if (tpl) store.change(d => { blockFromTemplate(d, tpl, t.date, t.start); });
   } else {
     store.change(d => { blockFromTodo(d, p.todoId, t.date, t.start); });

@@ -1,5 +1,6 @@
 import { isDateKey, formatLong } from './time/dates';
 import type { DateKey } from './time/dates';
+import type { Repeat } from './model/types';
 
 export interface BlockInput {
   title: string;
@@ -22,5 +23,21 @@ export function validateCategoryName(name: string, existing: string[]): string |
   const n = name.trim();
   if (!n) return 'Geef de categorie een naam.';
   if (existing.some(e => e.toLowerCase() === n.toLowerCase())) return 'Er bestaat al een categorie met deze naam.';
+  return null;
+}
+
+export function validateRepeat(r: Repeat, date: string, endDate: DateKey): string | null {
+  if (r.kind === 'none') return null;
+  if (r.until !== undefined && !isDateKey(r.until)) return 'Kies een geldige einddatum voor de herhaling.';
+  if (r.until && r.until < date) return 'De herhaling moet eindigen op of na de eerste keer.';
+  if (r.until && r.until > endDate) return `De herhaling kan niet verder lopen dan ${formatLong(endDate)}.`;
+  if (r.kind === 'dates' && !(r.dates ?? []).length) return 'Duid in de kalender minstens één extra dag aan.';
+  return null;
+}
+
+export function validateList(name: string, existing: string[]): string | null {
+  const n = name.trim();
+  if (!n) return 'Geef de lijst een naam.';
+  if (existing.some(e => e.toLowerCase() === n.toLowerCase())) return 'Er bestaat al een lijst met deze naam.';
   return null;
 }

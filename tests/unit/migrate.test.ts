@@ -18,10 +18,37 @@ describe('migratie en back-up', () => {
       settings: { accents: false, examDate: '2027-01-06' },
     };
     const d = migrate(v0);
-    expect(d.schemaVersion).toBe(1);
-    expect(d.blocks[0]).toMatchObject({ start: 420, end: 440, repeatWeekly: true, categoryId: 'overig', checks: { '2026-11-12': ['i1'] } });
+    expect(d.schemaVersion).toBe(2);
+    expect(d.blocks[0]).toMatchObject({ start: 420, end: 440, repeat: { kind: 'weekly' }, categoryId: 'overig', checks: { '2026-11-12': ['i1'] } });
     expect(d.settings).toMatchObject({ decor: false, examDate: '2027-01-06', endDate: '2027-02-07' });
     expect(d.todos[0]).toMatchObject({ categoryId: 'lessen', week: '2026-11-09' });
+  });
+  it('versie 1 → 2: herhaling, nieuwe categorieën, lijsten, Unief meepakken eigen categorie', () => {
+    const v1 = {
+      schemaVersion: 1,
+      categories: [
+        { id: 'lessen', name: 'Lessen', color: '#3b82f6' }, { id: 'studeren', name: 'Studeren', color: '#8b5cf6' },
+        { id: 'eigen', name: 'Gitaar', color: '#000000' },
+        { id: 'examen', name: 'Examen', color: '#dc2626' }, { id: 'overig', name: 'Overig', color: '#6b7280' },
+      ],
+      blocks: [
+        { id: 'a', title: 'Frituur', date: '2026-11-13', start: 1080, end: 1320, categoryId: 'eigen', location: '', notes: '', repeatWeekly: true, source: 'manual' },
+        { id: 'b', title: 'Unief meepakken', date: '2026-11-13', start: 480, end: 485, categoryId: 'overig', location: '', notes: '', repeatWeekly: false, source: 'manual',
+          checklist: [{ id: 'x', text: 'Laptop' }], checks: {} },
+      ],
+      todos: [],
+      settings: { endDate: '2027-02-07', examDate: '2027-01-05', decor: true, counterSort: 'name' },
+    };
+    const d = migrate(v1);
+    expect(d.schemaVersion).toBe(2);
+    expect(d.blocks[0]).toMatchObject({ repeat: { kind: 'weekly' }, categoryId: 'eigen' });
+    expect(d.blocks[0]).not.toHaveProperty('repeatWeekly');
+    expect(d.blocks[1].categoryId).toBe('unief');
+    expect(d.categories.map(c => c.id)).toEqual(['lessen', 'studeren', 'eigen', 'pauze', 'unief', 'verplaatsing', 'slapen', 'examen', 'overig']);
+    expect(d.categories.find(c => c.id === 'studeren')!.inChecklist).toBe(true);
+    expect(d.categories.find(c => c.name === 'Gitaar')!.inChecklist).toBeUndefined();
+    expect(d.lists.map(l => l.name)).toEqual(['Ochtendroutine', 'Unief meepakken']);
+    expect(d.settings).toMatchObject({ counterSort: 'name', zoom: 1.2 });
   });
   it('weigert onbruikbare of nieuwere bestanden', () => {
     expect(() => importJson('{kapot')).toThrow(MigrationError);

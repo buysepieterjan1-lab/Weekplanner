@@ -108,6 +108,6 @@ function toBlock(ev: IcsEvent, sum: ParsedSummary, freq: Map<string, number>, in
     title, date: a.date, start: a.minutes, end,
     categoryId: categoryFor(sum), location, notes: notes.join('\n'),
     ...(teachers.length ? { teachers } : {}),
-    repeatWeekly: false, source: 'ics', icsUid: uid,
+    repeat: { kind: 'none' }, source: 'ics', icsUid: uid,
   };
 }
