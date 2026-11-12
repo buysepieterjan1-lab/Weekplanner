@@ -1,27 +1,33 @@
 <script lang="ts">
-  import type { Occurrence } from '../lib/planner/occurrences';
+  import type { Segment } from '../lib/planner/occurrences';
   import { checklistProgress, isDone, isRepeating, describeRepeat } from '../lib/planner/occurrences';
   import { categoryOf, resize, handleDrop } from '../lib/actions';
   import { beginDrag, px } from '../actions/dnd.svelte';
   import { startGesture } from '../actions/gesture';
-  import { hm, snap, clamp, QUARTER, DAY_MINUTES, formatDuration } from '../lib/time/quarter';
+  import { hm, snap, clamp, STEP, DAY_MINUTES, formatDuration } from '../lib/time/quarter';
   import { shortLocation } from '../lib/ics/timeedit';
-  import { addDays, formatShort } from '../lib/time/dates';
+  import { addDays, diffDays, formatShort } from '../lib/time/dates';
   import { ui } from '../lib/store/ui.svelte';
   import { store } from '../lib/store/state.svelte';
   import { resizeBlock, moveBlock, toggleDone } from '../lib/planner/ops';
   import { tick } from 'svelte';
 
-  let { occ, lane, lanes }: { occ: Occurrence; lane: number; lanes: number } = $props();
+  let { seg, lane, lanes }: { seg: Segment; lane: number; lanes: number } = $props();
 
-  const b = $derived(occ.block);
+  // `seg` is het stuk op deze dag; `occ.date` is de dag waarop het blok begint
+  const occ = $derived(seg);
+  const b = $derived(seg.block);
   const cat = $derived(categoryOf(b.categoryId));
   let previewEnd = $state<number | null>(null);
   const end = $derived(previewEnd ?? b.end);
-  const height = $derived((end - b.start) * px());
+  // het stuk op deze dag: eerste dag tot middernacht, of vervolg vanaf 00:00
+  const segTop = $derived(seg.segStart);
+  const segBottom = $derived(seg.fromPrev ? end - DAY_MINUTES : Math.min(end, DAY_MINUTES));
+  const height = $derived((segBottom - segTop) * px());
+  const canResize = $derived(!seg.continuesNext);
   const progress = $derived(b.checklist?.length ? checklistProgress(b, occ.date) : null);
   const room = $derived(shortLocation(b.location));
-  const compact = $derived(end - b.start < 45);
+  const compact = $derived(segBottom - segTop < 35);
   const done = $derived(isDone(b, occ.date));
   const repeating = $derived(isRepeating(b));
 
@@ -40,7 +46,8 @@
     const r = el.getBoundingClientRect();
     beginDrag(e, {
       kind: 'block', blockId: b.id, fromDate: occ.date, duration: b.end - b.start,
-      offset: (e.clientY - r.top) / px(), title: b.title,
+      // afstand tot het echte begin (bij het vervolgstuk: vanaf het begin de vorige dag)
+      offset: (e.clientY - r.top) / px() + (seg.fromPrev ? DAY_MINUTES - b.start : 0), title: b.title,
     }, handleDrop, open);
   }
 
@@ -50,7 +57,9 @@
     const top = el.getBoundingClientRect().top;
     startGesture(e, {
       onMove(_x, y) {
-        previewEnd = clamp(snap(b.start + (y - top) / px()), b.start + QUARTER, DAY_MINUTES);
+        const base = seg.fromPrev ? DAY_MINUTES : b.start;
+        const max = seg.fromPrev ? b.start + DAY_MINUTES : DAY_MINUTES;
+        previewEnd = clamp(snap(base + (y - top) / px()), b.start + STEP, max);
       },
       onEnd(_x, _y, moved) {
         if (previewEnd != null && previewEnd !== b.end) resize(b.id, previewEnd);
@@ -66,12 +75,13 @@
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); return; }
     if (e.key === 'x' || e.key === 'X') { e.preventDefault(); setDone(!done); return; }
     let toDate = occ.date;
-    const dur = b.end - b.start;
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       e.preventDefault();
-      const delta = e.key === 'ArrowUp' ? -QUARTER : QUARTER;
+      const delta = e.key === 'ArrowUp' ? -STEP : STEP;
+      const before = b.date;
       if (e.shiftKey) store.change(d => resizeBlock(d, b.id, b.end + delta));
-      else store.change(d => moveBlock(d, b.id, occ.date, occ.date, clamp(b.start + delta, 0, DAY_MINUTES - dur)));
+      else store.change(d => moveBlock(d, b.id, occ.date, occ.date, b.start + delta));
+      toDate = addDays(occ.date, diffDays(before, b.date)); // kan naar de vorige/volgende dag schuiven
     } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       e.preventDefault();
       toDate = addDays(occ.date, e.key === 'ArrowLeft' ? -1 : 1);
@@ -83,7 +93,7 @@
   }
 
   const label = $derived(
-    `${b.title}, ${formatShort(occ.date)} ${hm(b.start)} tot ${hm(b.end)}` +
+    `${b.title}, ${formatShort(occ.date)} ${hm(b.start)} tot ${hm(b.end)}${b.end > DAY_MINUTES ? ' (volgende dag)' : ''}` +
     `${room ? `, ${room}` : ''}, ${cat.name}` +
     `${progress ? `, ${progress.done} van ${progress.total} klaar` : ''}` +
     `${repeating ? `, herhaalt ${describeRepeat(b, store.data.settings.endDate)}` : ''}` +
@@ -97,15 +107,17 @@
   class:compact
   class:repeat={repeating}
   class:done
+  class:cont-next={seg.continuesNext}
+  class:from-prev={seg.fromPrev}
   class:resizing={previewEnd != null}
   role="button"
   tabindex="0"
   aria-label={label}
   aria-keyshortcuts="Enter X ArrowUp ArrowDown ArrowLeft ArrowRight Shift+ArrowUp Shift+ArrowDown"
-  title="{b.title} · {hm(b.start)}–{hm(end)} ({formatDuration(end - b.start)})"
-  data-occ={occ.key}
+  title="{b.title} · {hm(b.start)}–{hm(end)}{end > DAY_MINUTES ? ' (volgende dag)' : ''} ({formatDuration(end - b.start)})"
+  data-occ={seg.key}
   data-testid="block"
-  style:top="{b.start * px()}px"
+  style:top="{segTop * px()}px"
   style:height="{Math.max(height - 2, 14)}px"
   style:left="calc({(lane * 100) / lanes}% + 2px)"
   style:width="calc({100 / lanes}% - 4px)"
@@ -114,7 +126,7 @@
   {onkeydown}
 >
   <div class="b-head">
-    <span class="b-start">{hm(b.start)}</span>
+    <span class="b-start" title={seg.fromPrev ? 'Begon de vorige dag' : undefined}>{seg.fromPrev ? '↑ ' : ''}{hm(b.start)}</span>
     <span class="b-title">{b.title}</span>
   </div>
   {#if !compact && (room || progress)}
@@ -125,7 +137,7 @@
   {:else if compact && progress}
     <span class="b-progress b-progress-inline">{progress.done}/{progress.total} klaar</span>
   {/if}
-  <span class="b-end">{hm(end)}</span>
+  <span class="b-end" title={end > DAY_MINUTES ? 'Eindigt de volgende dag' : undefined}>{hm(end)}{seg.continuesNext ? ' ↓' : ''}</span>
   <input
     type="checkbox"
     class="b-check"
@@ -137,5 +149,5 @@
     title={done ? 'Afgewerkt (klik om terug open te zetten)' : 'Afvinken'}
     onchange={e => setDone((e.currentTarget as HTMLInputElement).checked)}
   />
-  <div class="b-resize" data-resize aria-hidden="true" onpointerdown={onResizeDown}></div>
+  {#if canResize}<div class="b-resize" data-resize aria-hidden="true" onpointerdown={onResizeDown}></div>{/if}
 </div>

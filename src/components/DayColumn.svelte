@@ -1,11 +1,11 @@
 <script lang="ts">
   import { store } from '../lib/store/state.svelte';
   import { ui } from '../lib/store/ui.svelte';
-  import { occurrencesOn } from '../lib/planner/occurrences';
+  import { segmentsOn } from '../lib/planner/occurrences';
   import { layoutDay } from '../lib/planner/layout';
   import { drag, px } from '../actions/dnd.svelte';
   import { startGesture } from '../actions/gesture';
-  import { snapRange, placeBlock, hm, clamp, DAY_MINUTES } from '../lib/time/quarter';
+  import { snapRange, placeBlock, snap, hm, clamp, DAY_MINUTES } from '../lib/time/quarter';
   import { DAYS_LONG, weekday, formatLong, type DateKey } from '../lib/time/dates';
   import { DEFAULT_DURATION } from '../lib/model/defaults';
   import BlockView from './BlockView.svelte';
@@ -15,7 +15,7 @@
   const end = $derived(store.data.settings.endDate);
   const disabled = $derived(day > end);
   const placed = $derived(
-    layoutDay(occurrencesOn(store.data.blocks, day, end).map(o => ({ occ: o, start: o.block.start, end: o.block.end }))),
+    layoutDay(segmentsOn(store.data.blocks, day, end).map(seg => ({ seg, start: seg.segStart, end: seg.segEnd }))),
   );
   let col: HTMLDivElement;
   let sel = $state<{ a: number; b: number } | null>(null);
@@ -24,8 +24,11 @@
   const dropPreview = $derived.by(() => {
     const a = drag.active;
     if (!a || !a.target || a.target.date !== day || disabled) return null;
-    const dur = a.payload.kind === 'block' ? a.payload.duration : a.payload.duration;
-    return { ...placeBlock(a.target.start, dur), title: a.payload.title };
+    // zichtbaar deel van het blok op deze dag (het kan over middernacht lopen)
+    const st = snap(a.target.start);
+    const from = Math.max(st, 0), to = Math.min(st + a.payload.duration, DAY_MINUTES);
+    if (to <= from) return null;
+    return { start: from, end: to, realStart: st, realEnd: st + a.payload.duration, title: a.payload.title };
   });
 
   const minAt = (y: number) => clamp((y - col.getBoundingClientRect().top) / px(), 0, DAY_MINUTES);
@@ -45,7 +48,7 @@
         sel = null;
         if (!s) return;
         if (moved) { const r = snapRange(s.a, minAt(y)); create(r.start, r.end); }
-        else { const p = placeBlock(s.a, DEFAULT_DURATION); create(p.start, p.end); }
+        else { const p = placeBlock(Math.min(s.a, DAY_MINUTES - 10), DEFAULT_DURATION); create(p.start, p.end); }
       },
       onCancel() { sel = null; },
     });
@@ -53,7 +56,7 @@
 
   function ondblclick(e: MouseEvent) {
     if (disabled || e.target !== col) return;
-    const p = placeBlock(minAt(e.clientY), DEFAULT_DURATION);
+    const p = placeBlock(Math.min(minAt(e.clientY), DAY_MINUTES - 10), DEFAULT_DURATION);
     create(p.start, p.end);
   }
 </script>
@@ -71,8 +74,8 @@
   {ondblclick}
   oncontextmenu={e => e.preventDefault()}
 >
-  {#each placed as p (p.item.occ.key)}
-    <BlockView occ={p.item.occ} lane={p.lane} lanes={p.lanes} />
+  {#each placed as p (p.item.seg.key)}
+    <BlockView seg={p.item.seg} lane={p.lane} lanes={p.lanes} />
   {/each}
 
   {#if selRange}
@@ -83,7 +86,7 @@
 
   {#if dropPreview}
     <div class="drop-preview" style:top="{dropPreview.start * px()}px" style:height="{(dropPreview.end - dropPreview.start) * px()}px" aria-hidden="true">
-      <span>{hm(dropPreview.start)} – {hm(dropPreview.end)}</span>
+      <span>{hm(((dropPreview.realStart % DAY_MINUTES) + DAY_MINUTES) % DAY_MINUTES)} – {hm(((dropPreview.realEnd % DAY_MINUTES) + DAY_MINUTES) % DAY_MINUTES || DAY_MINUTES)}</span>
     </div>
   {/if}
 

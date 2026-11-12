@@ -21,6 +21,10 @@ describe('ICS-basis', () => {
     expect(() => parseIcs('hallo')).toThrow(IcsError);
     expect(() => importTimeEdit(cal(), END)).toThrow(/geen afspraken/);
   });
+  it('afspraak over middernacht wordt één blok', () => {
+    const r = importTimeEdit(cal(ev('20261120T220000Z', '20261121T010000Z', 'F710385A. Economie A\\, nachtles')), END);
+    expect(r.blocks[0]).toMatchObject({ date: '2026-11-20', start: 23 * 60, end: 26 * 60 });
+  });
   it('weigert de hele import bij een ongeldige afspraak', () => {
     expect(() => importTimeEdit(cal(ev('20261109T080000Z', '20261109T090000Z', 'F710385A. Economie A\\, hoorcollege'), ev('2026-11-10', 'x', 'kapot')), END))
       .toThrow(IcsError);

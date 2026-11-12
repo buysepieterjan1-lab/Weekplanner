@@ -1,5 +1,5 @@
 import type { Block } from '../model/types';
-import type { DateKey } from '../time/dates';
+import { diffDays, type DateKey } from '../time/dates';
 import { parseIcsUtc, utcToBrussels } from '../time/tz';
 import { parseIcs, IcsError, type IcsEvent } from './parse';
 
@@ -76,8 +76,9 @@ function toBlock(ev: IcsEvent, sum: ParsedSummary, freq: Map<string, number>, in
   const label = p.SUMMARY ? `"${p.SUMMARY.slice(0, 60)}"` : `nummer ${index + 1}`;
   if (s == null || e == null) throw new IcsError(`Afspraak ${label} heeft geen geldige begin- of eindtijd.`);
   const a = utcToBrussels(s), z = utcToBrussels(e);
-  const end = z.date === a.date ? z.minutes : z.minutes === 0 && z.date > a.date ? 1440 : -1;
-  if (end <= a.minutes) throw new IcsError(`Afspraak ${label} loopt over middernacht of eindigt vóór het begin.`);
+  const end = z.minutes + 1440 * diffDays(a.date, z.date);
+  if (end <= a.minutes) throw new IcsError(`Afspraak ${label} eindigt vóór het begin.`);
+  if (end - a.minutes > 1440) throw new IcsError(`Afspraak ${label} duurt langer dan 24 uur.`);
 
   let title: string;
   const notes: string[] = [];

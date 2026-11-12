@@ -4,10 +4,21 @@ import { diffDays, weekday, addDays, formatLong, DAYS_SHORT } from '../time/date
 
 export interface Occurrence {
   block: Block;
-  /** de datum waarop deze keer valt */
+  /** de datum waarop deze keer begint */
   date: DateKey;
   /** unieke sleutel per keer */
   key: string;
+}
+
+/** Het stuk van een keer dat op één dag zichtbaar is (een blok over middernacht heeft er twee). */
+export interface Segment extends Occurrence {
+  /** minuten op de getoonde dag */
+  segStart: number;
+  segEnd: number;
+  /** dit stuk loopt verder na middernacht */
+  continuesNext: boolean;
+  /** dit stuk is het vervolg van de vorige dag */
+  fromPrev: boolean;
 }
 
 export function isRepeating(b: Block): boolean {
@@ -33,6 +44,25 @@ export function occurrencesOn(blocks: Block[], day: DateKey, endDate: DateKey): 
   const out: Occurrence[] = [];
   for (const b of blocks) if (occursOn(b, day, endDate)) out.push({ block: b, date: day, key: `${b.id}@${day}` });
   return out.sort((a, b) => a.block.start - b.block.start || b.block.end - a.block.end);
+}
+
+/**
+ * Alles wat op een dag te zien is: blokken die die dag beginnen (tot middernacht)
+ * en het vervolg van blokken die de vorige dag over middernacht begonnen.
+ */
+export function segmentsOn(blocks: Block[], day: DateKey, endDate: DateKey): Segment[] {
+  const out: Segment[] = [];
+  if (day > endDate) return out;
+  for (const o of occurrencesOn(blocks, day, endDate)) {
+    const over = o.block.end > 1440;
+    out.push({ ...o, segStart: o.block.start, segEnd: Math.min(o.block.end, 1440), continuesNext: over, fromPrev: false });
+  }
+  const prev = addDays(day, -1);
+  for (const o of occurrencesOn(blocks, prev, endDate)) {
+    if (o.block.end <= 1440) continue;
+    out.push({ ...o, key: `${o.key}+`, segStart: 0, segEnd: o.block.end - 1440, continuesNext: false, fromPrev: true });
+  }
+  return out.sort((a, b) => a.segStart - b.segStart || b.segEnd - a.segEnd);
 }
 
 export function occurrencesIn(blocks: Block[], days: DateKey[], endDate: DateKey): Occurrence[] {

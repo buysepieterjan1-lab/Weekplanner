@@ -1,17 +1,18 @@
 <script lang="ts">
   /** Datum + starttijd kiezen: toetsenbordalternatief voor slepen naar de planner. */
-  import { QUARTER_OPTIONS } from '../lib/actions';
+  import TimeInput from './TimeInput.svelte';
   import { store } from '../lib/store/state.svelte';
   import { ui } from '../lib/store/ui.svelte';
   import { clampToEnd } from '../lib/time/dates';
 
   let { onplan, label = 'Inplannen' }: { onplan: (date: string, start: number) => boolean; label?: string } = $props();
   let date = $state(clampToEnd(ui.current, store.data.settings.endDate));
-  let start = $state(9 * 60);
+  let start = $state<number | null>(9 * 60);
   let error = $state('');
 
   function go() {
     if (!date) { error = 'Kies een geldige datum.'; return; }
+    if (start == null || start >= 1440) { error = 'Vul een geldige starttijd in (bv. 09:30 of 12:01).'; return; }
     error = '';
     if (onplan(date, start)) ui.close();
   }
@@ -24,9 +25,7 @@
   </div>
   <div>
     <label for="p-start">Start</label>
-    <select id="p-start" bind:value={start}>
-      {#each QUARTER_OPTIONS.filter(o => o.value < 1440) as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
-    </select>
+    <TimeInput id="p-start" bind:value={start} />
   </div>
   <button type="button" class="primary" onclick={go}>{label}</button>
 </div>

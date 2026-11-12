@@ -100,7 +100,16 @@ function v1to2(d: Raw): Raw {
     settings: { ...(isObj(d.settings) ? d.settings : {}), zoom: DEFAULT_ZOOM } };
 }
 
-const STEPS: Record<number, (d: Raw) => Raw> = { 0: v0to1, 1: v1to2 };
+/**
+ * v2 → v3: blokken mogen over middernacht lopen (einde > 24:00) en tijden mogen elke minuut zijn.
+ * De gegevens blijven gelijk; de versie gaat omhoog zodat een oudere versie van de app
+ * zulke blokken niet stilletjes weggooit maar weigert te overschrijven.
+ */
+function v2to3(d: Raw): Raw {
+  return { ...d, schemaVersion: 3 };
+}
+
+const STEPS: Record<number, (d: Raw) => Raw> = { 0: v0to1, 1: v1to2, 2: v2to3 };
 
 function readRepeat(v: unknown): Repeat {
   if (!isObj(v)) return { kind: 'none' };
@@ -127,7 +136,7 @@ function validate(d: Raw): AppData {
   const blocks: Block[] = [];
   for (const b of (d.blocks as unknown[]).filter(isObj)) {
     const start = b.start, end = b.end;
-    if (!isDateKey(b.date) || typeof start !== 'number' || typeof end !== 'number' || end <= start || start < 0 || end > 1440) continue;
+    if (!isDateKey(b.date) || typeof start !== 'number' || typeof end !== 'number' || end <= start || start < 0 || start >= 1440 || end - start > 1440) continue;
     const block: Block = {
       id: str(b.id) || newId(), title: str(b.title) || 'Zonder titel', date: b.date, start, end,
       categoryId: catIds.has(str(b.categoryId)) ? str(b.categoryId) : OVERIG_ID,

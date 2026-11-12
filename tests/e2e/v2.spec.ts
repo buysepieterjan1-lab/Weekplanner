@@ -5,8 +5,8 @@ async function newBlock(page: Page, title: string, start: string, end: string, c
   await page.getByRole('button', { name: '+ Blok' }).click();
   const dlg = page.getByTestId('block-dialog');
   await dlg.getByLabel('Titel').fill(title);
-  await dlg.getByLabel('Start').selectOption({ label: start });
-  await dlg.getByLabel('Einde', { exact: true }).selectOption({ label: end });
+  await dlg.getByLabel('Start').fill(start);
+  await dlg.getByLabel('Einde', { exact: true }).fill(end);
   if (cat) await dlg.getByLabel('Categorie').selectOption({ label: cat });
   return dlg;
 }

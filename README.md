@@ -4,9 +4,10 @@ Week- en studieplanner voor laptop en gsm. Installeerbaar als app (PWA), werkt o
 
 ## Gebruiken
 
-- **Blok maken**: dubbelklik op een lege plek, of klik en sleep over een bereik. Op gsm: lang indrukken (en slepen).
+- **Blok maken**: dubbelklik op een lege plek, of klik en sleep over een bereik (afgerond op 10 minuten). Op gsm: lang indrukken (en slepen).
+- **Tijden typen**: 12:01, 12.01, 12u01 of 1201. Ligt het einde vóór het begin (bv. 23:00 → 07:00), dan loopt het blok door tot de volgende dag (max. 24 uur).
 - **Verplaatsen**: blok slepen (ook naar een andere dag). **Duur**: onderrand slepen.
-- **Toetsenbord**: Tab naar een blok, Enter opent, pijl omhoog/omlaag verplaatst 15 min, links/rechts een dag, Shift+pijl wijzigt de duur.
+- **Toetsenbord**: Tab naar een blok, Enter opent, pijl omhoog/omlaag verplaatst 10 min, X vinkt af, links/rechts een dag, Shift+pijl wijzigt de duur.
 - **Lijsten**: klik toont de inhoud, slepen naar de planner maakt een blok met checklist. Met "+ Nieuwe lijst" of ✎ maak/bewerk je eigen lijsten.
 - **Herhalen**: niet, elke dag, elke week, gekozen weekdagen (telkens met "tot en met"), of zelf aanduiden in een mini-kalender.
 - **Afvinken**: elk blok heeft een vinkje (ook toets X). De afvinklijst rechtsonder toont ingeplande taken en blokken van gekozen categorieën, met percentage.

@@ -7,21 +7,21 @@ async function addBlock(page: import('@playwright/test').Page, title: string, st
   const dlg = page.getByTestId('block-dialog');
   await dlg.getByLabel('Titel').fill(title);
   if (opts.date) await dlg.getByLabel('Datum').fill(opts.date);
-  await dlg.getByLabel('Start').selectOption({ label: start });
-  await dlg.getByLabel('Einde', { exact: true }).selectOption({ label: end });
+  await dlg.getByLabel('Start').fill(start);
+  await dlg.getByLabel('Einde', { exact: true }).fill(end);
   if (opts.weekly) await dlg.locator('#b-repeat').selectOption('weekly');
   await dlg.getByRole('button', { name: 'Opslaan' }).click();
   await expect(dlg).toBeHidden();
 }
 
-test('onderrand slepen wijzigt de duur (afgerond op kwartier)', async ({ page }) => {
+test('onderrand slepen wijzigt de duur (afgerond op 10 minuten)', async ({ page }) => {
   await openApp(page);
   await addBlock(page, 'Werk frituur', '08:00', '09:00');
   const block = page.getByTestId(`day-${TODAY}`).getByTestId('block');
   const b = (await block.boundingBox())!;
   const from = { x: b.x + b.width / 2, y: b.y + b.height - 3 };
-  // naar 10:41 slepen → afgerond 10:45 (op gsm: vinger, meteen actief)
-  const to = { x: from.x, y: (await pointIn(page.getByTestId(`day-${TODAY}`), 10 * 60 + 41)).y };
+  // naar 10:43 slepen → afgerond 10:40 (op gsm: vinger, meteen actief)
+  const to = { x: from.x, y: (await pointIn(page.getByTestId(`day-${TODAY}`), 10 * 60 + 43)).y };
   if (isMobile(page)) {
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: from.x, y: from.y, id: 1 }] });
@@ -30,7 +30,7 @@ test('onderrand slepen wijzigt de duur (afgerond op kwartier)', async ({ page })
   } else {
     await drag(page, from, to);
   }
-  await expect(block).toContainText('10:45');
+  await expect(block).toContainText('10:40');
   await expect(page.getByTestId('block-dialog')).toBeHidden();
 });
 
@@ -66,9 +66,9 @@ test('bediening met het toetsenbord', async ({ page }) => {
   const block = page.getByTestId(`day-${TODAY}`).getByTestId('block');
   await block.focus();
   await page.keyboard.press('ArrowDown');
-  await expect(page.getByTestId(`day-${TODAY}`).getByTestId('block')).toContainText('10:15');
+  await expect(page.getByTestId(`day-${TODAY}`).getByTestId('block')).toContainText('10:10');
   await page.keyboard.press('Shift+ArrowDown');
-  await expect(page.getByTestId(`day-${TODAY}`).getByTestId('block')).toContainText('11:30');
+  await expect(page.getByTestId(`day-${TODAY}`).getByTestId('block')).toContainText('11:20');
   await page.keyboard.press('ArrowRight');
   await expect(page.getByTestId('day-2026-11-12').getByTestId('block')).toBeFocused();
   await page.keyboard.press('Enter');
@@ -86,7 +86,7 @@ test('back-up exporteren en terugzetten', async ({ page }) => {
   await s.getByRole('button', { name: 'Exporteren (JSON)' }).click();
   const file = await (await dl).path();
   const json = JSON.parse(readFileSync(file, 'utf8'));
-  expect(json.schemaVersion).toBe(2);
+  expect(json.schemaVersion).toBe(3);
   expect(json.blocks[0].title).toBe('Back-up blok');
 
   // ongeldige back-up: niets gewijzigd

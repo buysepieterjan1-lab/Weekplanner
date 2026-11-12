@@ -14,8 +14,12 @@ export function validateBlock(d: BlockInput, endDate: DateKey): string | null {
   if (!d.title.trim()) return 'Vul een titel in.';
   if (!isDateKey(d.date)) return 'Kies een geldige datum.';
   if (d.date > endDate) return `Deze datum valt buiten de planner. De planner loopt tot en met ${formatLong(endDate)}.`;
-  if (d.start == null || d.end == null) return 'Vul een geldige starttijd en eindtijd in.';
-  if (d.end <= d.start) return 'Het einde moet na het begin liggen.';
+  if (d.start == null) return 'Vul een geldige starttijd in (bv. 09:30 of 12:01).';
+  if (d.end == null) return 'Vul een geldige eindtijd in (bv. 11:00 of 12:01).';
+  if (d.start >= 1440) return 'De starttijd moet vóór 24:00 liggen.';
+  if (d.end === d.start) return 'Begin en einde zijn gelijk. Pas een van beide aan.';
+  if (d.end < d.start) return 'Het einde moet na het begin liggen.';
+  if (d.end - d.start > 1440) return 'Een blok kan hoogstens 24 uur duren.';
   return null;
 }
 

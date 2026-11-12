@@ -4,7 +4,7 @@ import { shiftRepeat } from './occurrences';
 import { OVERIG_ID, DEFAULT_DURATION, newId } from '../model/defaults';
 import type { DateKey } from '../time/dates';
 import { addDays, diffDays } from '../time/dates';
-import { placeBlock, clamp, DAY_MINUTES, QUARTER } from '../time/quarter';
+import { placeBlock, clamp, DAY_MINUTES, STEP } from '../time/quarter';
 
 export type BlockFields = Pick<Block, 'title' | 'date' | 'start' | 'end' | 'categoryId' | 'location' | 'notes' | 'repeat'> & { inTodo?: boolean };
 const NO_REPEAT = () => ({ kind: 'none' as const });
@@ -39,8 +39,9 @@ export function updateBlock(data: AppData, id: string, f: BlockFields, occurrenc
 export function moveBlock(data: AppData, id: string, fromDate: DateKey, toDate: DateKey, start: number): void {
   const b = data.blocks.find(x => x.id === id);
   if (!b) return;
+  // start mag negatief zijn of na 24:00 vallen (vervolgstuk van een blok over middernacht verslepen)
   const p = placeBlock(start, b.end - b.start);
-  const shift = diffDays(fromDate, toDate);
+  const shift = diffDays(fromDate, toDate) + p.dayShift;
   b.date = addDays(b.date, shift);
   b.repeat = shiftRepeat(b.repeat, shift);
   b.start = p.start;
@@ -50,7 +51,8 @@ export function moveBlock(data: AppData, id: string, fromDate: DateKey, toDate: 
 export function resizeBlock(data: AppData, id: string, end: number): void {
   const b = data.blocks.find(x => x.id === id);
   if (!b) return;
-  b.end = clamp(end, b.start + QUARTER, DAY_MINUTES);
+  // een blok duurt minstens één rasterstap en hoogstens 24 uur (mag over middernacht)
+  b.end = clamp(end, b.start + STEP, b.start + DAY_MINUTES);
 }
 
 export function deleteBlock(data: AppData, id: string): void {
@@ -79,10 +81,11 @@ export function toggleDone(data: AppData, id: string, date: DateKey, done: boole
   }
 }
 
-export function blockFromTemplate(data: AppData, t: ListTemplate, date: DateKey, start: number): Block {
-  const p = placeBlock(start, t.minutes);
+/** `exact`: getypte starttijd niet afronden (bij slepen wordt wel afgerond op het raster). */
+export function blockFromTemplate(data: AppData, t: ListTemplate, date: DateKey, start: number, exact = false): Block {
+  const p = placeBlock(start, t.minutes, !exact);
   return addBlock(data, {
-    title: t.name, date, start: p.start, end: p.end, categoryId: catOr(data, t.categoryId),
+    title: t.name, date: addDays(date, p.dayShift), start: p.start, end: p.end, categoryId: catOr(data, t.categoryId),
     location: '', notes: '', repeat: NO_REPEAT(),
   }, {
     checklist: t.items.map(i => ({ id: newId(), text: i.text, ...(i.minutes != null ? { minutes: i.minutes } : {}), ...(i.group ? { group: i.group } : {}) })),
@@ -91,12 +94,12 @@ export function blockFromTemplate(data: AppData, t: ListTemplate, date: DateKey,
 }
 
 /** Taak naar de planner: blok van 1 uur, taak verdwijnt uit de lijst. */
-export function blockFromTodo(data: AppData, todoId: string, date: DateKey, start: number): Block | null {
+export function blockFromTodo(data: AppData, todoId: string, date: DateKey, start: number, exact = false): Block | null {
   const t = data.todos.find(x => x.id === todoId);
   if (!t) return null;
-  const p = placeBlock(start, DEFAULT_DURATION);
+  const p = placeBlock(start, DEFAULT_DURATION, !exact);
   const b = addBlock(data, {
-    title: t.text, date, start: p.start, end: p.end, categoryId: catOr(data, t.categoryId),
+    title: t.text, date: addDays(date, p.dayShift), start: p.start, end: p.end, categoryId: catOr(data, t.categoryId),
     location: '', notes: '', repeat: NO_REPEAT(),
   }, { inTodo: true });
   data.todos = data.todos.filter(x => x.id !== todoId);

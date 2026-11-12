@@ -7,8 +7,8 @@
   import { validateBlock, validateRepeat } from '../lib/validate';
   import { addBlock, updateBlock, deleteBlock, type BlockFields } from '../lib/planner/ops';
   import { isRepeating } from '../lib/planner/occurrences';
-  import { QUARTER_OPTIONS } from '../lib/actions';
-  import { hm } from '../lib/time/quarter';
+  import TimeInput from './TimeInput.svelte';
+  import { hm, resolveEnd, formatDuration } from '../lib/time/quarter';
   import { formatLong, weekday, DAYS_SHORT, DAYS_LONG, isDateKey, type DateKey } from '../lib/time/dates';
   import type { Repeat, RepeatKind } from '../lib/model/types';
 
@@ -22,8 +22,10 @@
 
   let title = $state(existing?.title ?? '');
   let date = $state<string>(init.occurrenceDate ?? existing?.date ?? init.draft?.date ?? ui.current);
-  let start = $state<number>(existing?.start ?? init.draft?.start ?? 540);
-  let stop = $state<number>(existing?.end ?? init.draft?.end ?? 600);
+  let start = $state<number | null>(existing?.start ?? init.draft?.start ?? 540);
+  // getypte eindtijd (zonder dag); ligt die vóór het begin, dan is het de volgende dag
+  const e0 = existing?.end ?? init.draft?.end ?? 600;
+  let stop = $state<number | null>(e0 > 1440 ? e0 - 1440 : e0);
   let categoryId = $state(existing?.categoryId ?? store.data.categories[0]?.id ?? 'overig');
   let location = $state(existing?.location ?? '');
   let notes = $state(existing?.notes ?? '');
@@ -38,10 +40,11 @@
   const inTodo = $derived(todoChoice ?? catDefault);
   const wd = $derived(isDateKey(date) ? weekday(date) : 0);
 
-  // tijden die niet op een kwartier vallen toch kunnen tonen
-  const options = $derived.by(() => {
-    const extra = [start, stop].filter(v => v % 15 !== 0).map(v => ({ value: v, label: hm(v) }));
-    return [...QUARTER_OPTIONS, ...extra].sort((a, b) => a.value - b.value);
+  const endAbs = $derived(start != null && stop != null && stop !== start ? resolveEnd(start, stop) : null);
+  const timeHint = $derived.by(() => {
+    if (endAbs == null || start == null) return '';
+    const dur = formatDuration(endAbs - start);
+    return endAbs > 1440 ? `Eindigt de volgende dag om ${hm(endAbs)} · ${dur}` : `Duur: ${dur}`;
   });
 
   function toggleDay(d: number) {
@@ -64,12 +67,12 @@
   }
 
   function save() {
-    error = validateBlock({ title, date, start, end: stop }, end) ?? '';
+    error = validateBlock({ title, date, start, end: start != null && stop != null && stop !== start ? resolveEnd(start, stop) : stop }, end) ?? '';
     const repeat = buildRepeat();
     if (!error) error = validateRepeat(repeat, date, end) ?? '';
     if (error) return;
     const f: BlockFields = {
-      title, date, start, end: stop, categoryId, location: location.trim(), notes: notes.trim(), repeat,
+      title, date, start: start!, end: endAbs!, categoryId, location: location.trim(), notes: notes.trim(), repeat,
       ...(todoChoice === null || todoChoice === catDefault ? {} : { inTodo: todoChoice }),
     };
     if (existing) store.change(d => updateBlock(d, existing.id, f, init.occurrenceDate));
@@ -111,17 +114,14 @@
       </div>
       <div>
         <label for="b-start">Start</label>
-        <select id="b-start" bind:value={start}>
-          {#each options.filter(o => o.value < 1440) as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
-        </select>
+        <TimeInput id="b-start" bind:value={start} describedby="b-time-hint" />
       </div>
       <div>
         <label for="b-end">Einde</label>
-        <select id="b-end" bind:value={stop}>
-          {#each options.filter(o => o.value > 0) as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
-        </select>
+        <TimeInput id="b-end" bind:value={stop} describedby="b-time-hint" />
       </div>
     </div>
+    <p class="hint" id="b-time-hint" data-testid="time-hint" aria-live="polite">{timeHint || 'Typ bv. 9:30, 12:01 of 1430.'}</p>
 
     <label for="b-cat">Categorie</label>
     <select id="b-cat" bind:value={categoryId}>

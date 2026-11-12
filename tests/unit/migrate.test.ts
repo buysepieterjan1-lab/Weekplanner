@@ -18,7 +18,7 @@ describe('migratie en back-up', () => {
       settings: { accents: false, examDate: '2027-01-06' },
     };
     const d = migrate(v0);
-    expect(d.schemaVersion).toBe(2);
+    expect(d.schemaVersion).toBe(3);
     expect(d.blocks[0]).toMatchObject({ start: 420, end: 440, repeat: { kind: 'weekly' }, categoryId: 'overig', checks: { '2026-11-12': ['i1'] } });
     expect(d.settings).toMatchObject({ decor: false, examDate: '2027-01-06', endDate: '2027-02-07' });
     expect(d.todos[0]).toMatchObject({ categoryId: 'lessen', week: '2026-11-09' });
@@ -40,7 +40,7 @@ describe('migratie en back-up', () => {
       settings: { endDate: '2027-02-07', examDate: '2027-01-05', decor: true, counterSort: 'name' },
     };
     const d = migrate(v1);
-    expect(d.schemaVersion).toBe(2);
+    expect(d.schemaVersion).toBe(3);
     expect(d.blocks[0]).toMatchObject({ repeat: { kind: 'weekly' }, categoryId: 'eigen' });
     expect(d.blocks[0]).not.toHaveProperty('repeatWeekly');
     expect(d.blocks[1].categoryId).toBe('unief');
@@ -49,6 +49,14 @@ describe('migratie en back-up', () => {
     expect(d.categories.find(c => c.name === 'Gitaar')!.inChecklist).toBeUndefined();
     expect(d.lists.map(l => l.name)).toEqual(['Ochtendroutine', 'Unief meepakken']);
     expect(d.settings).toMatchObject({ counterSort: 'name', zoom: 1.2 });
+  });
+  it('versie 2 → 3 behoudt alles; blokken over middernacht blijven bewaard', () => {
+    const d = defaultData();
+    const v2 = { ...structuredClone(d), schemaVersion: 2,
+      blocks: [{ id: 's', title: 'Slapen', date: '2026-11-16', start: 1380, end: 1860, categoryId: 'slapen', location: '', notes: '', repeat: { kind: 'daily' }, source: 'manual' }] };
+    const m = migrate(v2);
+    expect(m.schemaVersion).toBe(3);
+    expect(m.blocks[0]).toMatchObject({ start: 1380, end: 1860, repeat: { kind: 'daily' } });
   });
   it('weigert onbruikbare of nieuwere bestanden', () => {
     expect(() => importJson('{kapot')).toThrow(MigrationError);
@@ -67,7 +75,8 @@ describe('validatiemeldingen', () => {
   it('Nederlandse meldingen', () => {
     expect(validateBlock(ok, '2027-02-07')).toBeNull();
     expect(validateBlock({ ...ok, title: '  ' }, '2027-02-07')).toBe('Vul een titel in.');
-    expect(validateBlock({ ...ok, end: 600 }, '2027-02-07')).toBe('Het einde moet na het begin liggen.');
+    expect(validateBlock({ ...ok, end: 590 }, '2027-02-07')).toBe('Het einde moet na het begin liggen.');
+    expect(validateBlock({ ...ok, end: 600 }, '2027-02-07')).toBe('Begin en einde zijn gelijk. Pas een van beide aan.');
     expect(validateBlock({ ...ok, date: '2027-02-08' }, '2027-02-07')).toMatch(/buiten de planner.*7 februari 2027/);
     expect(validateBlock({ ...ok, date: '' }, '2027-02-07')).toBe('Kies een geldige datum.');
   });

@@ -5,7 +5,6 @@ import { moveBlock, resizeBlock, blockFromTemplate, blockFromTodo } from './plan
 import { OVERIG_ID } from './model/defaults';
 import type { DragPayload, DropTarget } from '../actions/dnd.svelte';
 import { formatLong, type DateKey } from './time/dates';
-import { hm, QUARTER, DAY_MINUTES } from './time/quarter';
 import type { Category } from './model/types';
 
 export function outOfRange(date: DateKey): boolean {
@@ -30,13 +29,14 @@ export function handleDrop(p: DragPayload, t: DropTarget): void {
 
 export function planTemplate(templateId: string, date: DateKey, start: number): boolean {
   if (outOfRange(date)) { rangeError(); return false; }
-  handleDrop({ kind: 'template', templateId, duration: 0, title: '' }, { date, start });
+  const tpl = store.data.lists.find(x => x.id === templateId);
+  if (tpl) store.change(d => { blockFromTemplate(d, tpl, date, start, true); });
   return true;
 }
 
 export function planTodo(todoId: string, date: DateKey, start: number): boolean {
   if (outOfRange(date)) { rangeError(); return false; }
-  handleDrop({ kind: 'todo', todoId, duration: 60, title: '' }, { date, start });
+  store.change(d => { blockFromTodo(d, todoId, date, start, true); });
   return true;
 }
 
@@ -49,7 +49,3 @@ export function categoryOf(id: string): Category {
   return cats.find(c => c.id === id) ?? cats.find(c => c.id === OVERIG_ID) ?? { id: OVERIG_ID, name: 'Overig', color: '#6b7280' };
 }
 
-/** Keuzelijst met kwartieren (00:00 … 24:00). */
-export const QUARTER_OPTIONS: { value: number; label: string }[] = Array.from(
-  { length: DAY_MINUTES / QUARTER + 1 }, (_, i) => ({ value: i * QUARTER, label: hm(i * QUARTER) }),
-);

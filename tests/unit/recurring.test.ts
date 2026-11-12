@@ -2,12 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { defaultData, DEFAULT_LISTS } from '../../src/lib/model/defaults';
 import {
   addBlock, updateBlock, moveBlock, toggleCheck, toggleDone, blockFromTemplate, blockFromTodo, addTodo, deleteCategory,
-  replaceImported, saveList, deleteList, parseListItems, listItemsToText, type BlockFields,
+  replaceImported, saveList, deleteList, parseListItems, listItemsToText, resizeBlock, type BlockFields,
 } from '../../src/lib/planner/ops';
-import { occurrencesOn, occurrencesIn, checklistProgress, isDone, inChecklist, describeRepeat } from '../../src/lib/planner/occurrences';
+import { occurrencesOn, occurrencesIn, segmentsOn, checklistProgress, isDone, inChecklist, describeRepeat } from '../../src/lib/planner/occurrences';
 import { countByCategory } from '../../src/lib/planner/counter';
 import { weekDays } from '../../src/lib/time/dates';
-import { validateRepeat } from '../../src/lib/validate';
+import { validateRepeat, validateBlock } from '../../src/lib/validate';
 
 const END = '2027-02-07';
 const base: BlockFields = {
@@ -110,7 +110,7 @@ describe('overige bewerkingen', () => {
     const d = defaultData();
     const t = addTodo(d, '2026-11-09', 'Oefeningen wiskunde', 'studeren')!;
     const b = blockFromTodo(d, t.id, '2026-11-12', 847)!;
-    expect([b.start, b.end]).toEqual([840, 900]);
+    expect([b.start, b.end]).toEqual([850, 910]); // 14:07 → 14:10
     expect(d.todos).toHaveLength(0);
   });
   it('categorie verwijderen → blokken en lijsten naar Overig; Overig niet verwijderbaar', () => {
@@ -160,5 +160,59 @@ describe('overige bewerkingen', () => {
     replaceImported(d, [{ ...base, id: 'ics-2', source: 'ics', repeat: { kind: 'none' } }]);
     expect(d.blocks.map(b => b.id).filter(i => i.startsWith('ics'))).toEqual(['ics-2']);
     expect(d.blocks).toHaveLength(2);
+  });
+});
+
+describe('over middernacht', () => {
+  const sleep: BlockFields = {
+    title: 'Slapen', date: '2026-11-16', start: 1380, end: 1860, categoryId: 'slapen', location: '', notes: '', repeat: { kind: 'none' },
+  };
+  it('verschijnt op twee dagen als twee stukken van één blok', () => {
+    const d = defaultData();
+    addBlock(d, sleep);
+    const mon = segmentsOn(d.blocks, '2026-11-16', END);
+    const tue = segmentsOn(d.blocks, '2026-11-17', END);
+    expect(mon.map(s => [s.segStart, s.segEnd, s.continuesNext, s.fromPrev])).toEqual([[1380, 1440, true, false]]);
+    expect(tue.map(s => [s.segStart, s.segEnd, s.continuesNext, s.fromPrev, s.date])).toEqual([[0, 420, false, true, '2026-11-16']]);
+    expect(mon[0].key).not.toBe(tue[0].key);
+  });
+  it('dagelijks herhaald: elke nacht twee stukken', () => {
+    const d = defaultData();
+    addBlock(d, { ...sleep, repeat: { kind: 'daily' } });
+    expect(segmentsOn(d.blocks, '2026-11-18', END)).toHaveLength(2);
+    expect(segmentsOn(d.blocks, '2026-11-16', END)).toHaveLength(1);
+  });
+  it('teller: één blok met de volledige duur op de startdag; vinkje geldt voor beide stukken', () => {
+    const d = defaultData();
+    const b = addBlock(d, sleep);
+    const rows = countByCategory(d.blocks, d.categories, ['2026-11-16'], END, 'count');
+    expect(rows.find(r => r.category.id === 'slapen')).toMatchObject({ count: 1, minutes: 480 });
+    toggleDone(d, b.id, '2026-11-16', true);
+    expect(isDone(b, segmentsOn(d.blocks, '2026-11-17', END)[0].date)).toBe(true);
+  });
+  it('vervolgstuk verslepen kan het blok naar de volgende dag verplaatsen', () => {
+    const d = defaultData();
+    const b = addBlock(d, sleep);
+    // pointer zit 4 uur na het begin; laten vallen op di 05:00 → begin di 01:00
+    moveBlock(d, b.id, '2026-11-16', '2026-11-17', 300 - 240);
+    expect([b.date, b.start, b.end]).toEqual(['2026-11-17', 60, 540]);
+    moveBlock(d, b.id, '2026-11-17', '2026-11-17', -60);
+    expect([b.date, b.start, b.end]).toEqual(['2026-11-16', 1380, 1860]);
+  });
+  it('duur aanpassen: minstens 10 minuten, hoogstens 24 uur', () => {
+    const d = defaultData();
+    const b = addBlock(d, sleep);
+    resizeBlock(d, b.id, 1385);
+    expect(b.end).toBe(1390);
+    resizeBlock(d, b.id, 5000);
+    expect(b.end).toBe(1380 + 1440);
+  });
+  it('validatie', () => {
+    const ok = { title: 'x', date: '2026-11-16' };
+    expect(validateBlock({ ...ok, start: 1380, end: 1860 }, END)).toBeNull();
+    expect(validateBlock({ ...ok, start: 600, end: 600 }, END)).toMatch(/gelijk/);
+    expect(validateBlock({ ...ok, start: 600, end: 600 + 1441 }, END)).toMatch(/24 uur/);
+    expect(validateBlock({ ...ok, start: null, end: 600 }, END)).toMatch(/starttijd/);
+    expect(validateBlock({ ...ok, start: 1440, end: 1500 }, END)).toMatch(/vóór 24:00/);
   });
 });

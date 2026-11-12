@@ -1,6 +1,6 @@
 import type { DateKey } from '../time/dates';
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export interface Category {
   id: string;
@@ -38,8 +38,9 @@ export interface Block {
   id: string;
   title: string;
   date: DateKey;
-  /** minuten sinds middernacht */
+  /** minuten sinds middernacht van `date` */
   start: number;
+  /** minuten sinds middernacht van `date`; meer dan 1440 = loopt over middernacht (max. 24 uur na het begin) */
   end: number;
   categoryId: string;
   location: string;
